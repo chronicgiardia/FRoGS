@@ -4,27 +4,77 @@ import gc
 import os
 import shutil
 import pickle
+import sys
+from types import SimpleNamespace
 from utils.random_walk import random_walk_w_restart as rwr
 from utils.sampling_util import rw_sampling
 from tensorflow.python.keras import backend as K
 from tensorflow.keras import layers, losses
 from tensorflow import keras
 from tensorflow.keras.models import Model
-import argparse
 
-def parse_args():
-    parser = argparse.ArgumentParser(description='Train gene embeddings')
-    parser.add_argument('--datatype', default='go',
-                        help='Type of data from which the gene embeddings learned. go or archs4')
-    parser.add_argument('--association_file', default='../data/go_gene_association.txt',
-                        help='Path to a file containing GO term gene associations or ARCHS4 experiments gene associations')
-    parser.add_argument('--outfile', default='../data/gene_vec_go.csv',
-                        help='Path to save the learned embeddings')
-    parser.add_argument('--LR_model', default=None,
-                        help='Path to a directory to save or load the logistic regression model')
-    parser.add_argument('--demo', default=None,
-                        help='Path to the demo directory to export the learned embeddings into')
-    return parser.parse_args()
+def parse_args(argv=None):
+    '''Parse CLI arguments via a manual sys.argv scan.
+
+    Mirrors the argument-parsing style used by graphify's `args-demo`
+    command: each flag is checked explicitly with a cursor loop, and both
+    "--flag value" and "--flag=value" forms are supported.
+    '''
+    argv = sys.argv[1:] if argv is None else argv
+
+    if '-h' in argv or '--help' in argv:
+        print('Usage: gene_vec_model.py [--datatype go|archs4] [--association_file PATH]')
+        print('                          [--outfile PATH] [--LR_model DIR] [--demo DIR]')
+        print()
+        print('  --datatype TYPE          type of data the embeddings are learned from:')
+        print('                           go or archs4 (default: go)')
+        print('  --association_file PATH  GO/ARCHS4 gene association file')
+        print('                           (default: ../data/go_gene_association.txt)')
+        print('  --outfile PATH           path to save the learned embeddings')
+        print('                           (default: ../data/gene_vec_go.csv)')
+        print('  --LR_model DIR           directory to save or load the logistic regression model')
+        print('  --demo DIR               demo directory to export the learned embeddings into')
+        sys.exit(0)
+
+    datatype = 'go'
+    association_file = '../data/go_gene_association.txt'
+    outfile = '../data/gene_vec_go.csv'
+    LR_model = None
+    demo = None
+
+    i = 0
+    while i < len(argv):
+        if argv[i] == '--datatype' and i + 1 < len(argv):
+            datatype = argv[i + 1]; i += 2
+        elif argv[i].startswith('--datatype='):
+            datatype = argv[i].split('=', 1)[1]; i += 1
+        elif argv[i] == '--association_file' and i + 1 < len(argv):
+            association_file = argv[i + 1]; i += 2
+        elif argv[i].startswith('--association_file='):
+            association_file = argv[i].split('=', 1)[1]; i += 1
+        elif argv[i] == '--outfile' and i + 1 < len(argv):
+            outfile = argv[i + 1]; i += 2
+        elif argv[i].startswith('--outfile='):
+            outfile = argv[i].split('=', 1)[1]; i += 1
+        elif argv[i] == '--LR_model' and i + 1 < len(argv):
+            LR_model = argv[i + 1]; i += 2
+        elif argv[i].startswith('--LR_model='):
+            LR_model = argv[i].split('=', 1)[1]; i += 1
+        elif argv[i] == '--demo' and i + 1 < len(argv):
+            demo = argv[i + 1]; i += 2
+        elif argv[i].startswith('--demo='):
+            demo = argv[i].split('=', 1)[1]; i += 1
+        else:
+            print(f'error: unrecognized argument: {argv[i]}', file=sys.stderr)
+            sys.exit(1)
+
+    return SimpleNamespace(
+        datatype=datatype,
+        association_file=association_file,
+        outfile=outfile,
+        LR_model=LR_model,
+        demo=demo,
+    )
 
 def get_model(vocab_size, latent_dim, ori_dim):
     encoder_input_l = keras.Input(shape=(1,), name="geneidx_l")
